@@ -1,0 +1,15 @@
+# 输入数据与生成产物不进库
+hainan/
+refactor/baseline_run/outputs/
+refactor/regression_out/
+海南风光_仅需hainan目录_一键全流程包/outputs/
+
+# 运行时生成
+__pycache__/
+*.pyc
+*.log
+refactor/curve_pipeline/data/网格海陆核对.json
+
+# 临时文件
+~$*
+_pptx_media/
