@@ -3,6 +3,7 @@ hainan/
 refactor/baseline_run/outputs/
 refactor/regression_out/
 海南风光_仅需hainan目录_一键全流程包/outputs/
+海南风光_仅需hainan目录_一键全流程包/data/
 
 # 运行时生成
 __pycache__/
@@ -13,3 +14,8 @@ refactor/curve_pipeline/data/网格海陆核对.json
 # 临时文件
 ~$*
 _pptx_media/
+
+.claude/
+CLAUDE.md
+hainan/
+outputs/

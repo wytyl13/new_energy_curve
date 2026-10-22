@@ -170,6 +170,66 @@ regression_out/            重构版回归输出
 
 结果读取目录：环境变量 `CURVE_OUTPUTS_ROOT`，缺省 `refactor/regression_out`。
 
+## 子项目：new_energy 解耦核心算法（区域CSV输入 + 服务端全国掩码）
+
+> 2026-10-22 用户定方案并实现。前端传预处理后的区域 CSV（风速已合成/辐照已÷3600），
+> 年份数不固定；全国海陆掩码为服务端静态文件；资源类型（风/光）与场景（正常/大/小/全部）
+> 解耦传参，传什么算什么；结果按 曲线-场景-资源/出力 分文件存储。原始包保留不动；
+> refactor/ 已于 2026-10-22 删除（被 new_energy 取代，其回归留痕见本文件历史记录）。
+
+### 结构与输入契约
+
+- `new_energy/` 核心算法包，模块直接放平：`axis`（8760时间轴）、`load_csv`（区域CSV读取）、
+  `mask_lookup`（全国掩码查表+海/陆/全格等权平均）、`classify`（分档）、`medoid`（选代表年）、
+  `wind_insert` / `solar_insert`（极端修正，自 refactor 逐字平移含自检断言）、`power`（出力映射）、
+  `pipeline`（`run()` 唯一入口，含可选 `progress(0~1小数, 说明)` 回调）。
+  服务层在项目根：`api/`（server 装配 / routers / schema / response）、
+  `core/compute`（同步计算编排）、`start_server.py` 启动脚本。
+- 输入：`data_dir` 每年一个 CSV，列名 `<变量名>_lat_<纬度>_lon_<经度>` 一格点一列，
+  格点可为散布子集（不验行政区、不强求矩形）；闰年删 2/29 规整 8760；各年格点列须一致。
+- 分档泛化：小/大各 `N//4`、平均居中（N=76 时恰为冻结版 19/38/19）；N<4 报错。
+- 掩码：缺省 `data/全国网格海陆分类.csv`（ARCO-ERA5 lsm 口径），行列整数算术换算查表；
+  风一次算出海风+陆风两族，光全格平均（负噪声≥−0.01 W/m² 截 0，同冻结版）。
+- 输出：`<曲线>-<场景>-资源.csv` / `<曲线>-<场景>-出力.csv`（曲线∈海风/陆风/光伏，
+  场景∈大/正常/小），三列 `时间维度, 插入前*, 插入后*`，8760 行；`run()` 返回
+  `{表名: [sheet]}`：表名 = 曲线-场景-资源/出力（与结果文件同名），每键一个 sheet 的
+  list（留多 sheet 扩展），sheet = {sheet_name, index, data:[插入前/插入后两列]}
+  （api-json-format；2026-10-22 用户定稿口径）。
+- 场景映射：normal=正常（=平均档）/ high=大 / low=小 / all=全部。
+
+### 服务端点（统一响应 {success, message, data, timestamp}；400 参数错；纯同步无任务态）
+
+| 端点 | 方法 | 传参 | 返回 |
+|---|---|---|---|
+| /api/health | GET | 无 | {status, message, timestamp} |
+| /api/curve/compute | POST | {resource, scenario, data_dir, output_dir?} | 阻塞至算完：data = {表名: [sheet]}（表名=曲线-场景-资源/出力，sheet 含 index 8760 + 插入前/后两列）；文件写 output_dir（自动创建）或缺省 outputs/<时间戳_短随机>/ |
+
+结果根目录：环境变量 `CURVE_OUTPUTS_ROOT`，缺省项目根 `outputs/`；每次计算独立子目录
+（`时间戳_短随机`）。
+
+### 冒烟结果（data/wind，2000—2025 共 26 年、51 格点，2026-10-22）
+
+| 曲线-场景 | 代表年 | 修改小时 | 利用小时 插前→插后 |
+|---|---|---|---|
+| 海风-大 | 2020 | 3 | 1206.3 → 1206.1 |
+| 海风-正常 | 2008 | 253 | 1014.8 → 1043.0 |
+| 海风-小 | 2004 | 140 | 823.8 → 865.2 |
+| 陆风-大 | 2020 | 0 | 1585.4 → 1585.4 |
+| 陆风-正常 | 2008 | 204 | 1318.1 → 1331.5 |
+| 陆风-小 | 2004 | 148 | 1022.8 → 1072.7 |
+
+大档插入量趋零是算法语义而非缺陷：插入只补代表年相对库均值的越阈缺口，
+medoid 年本就贴库均值，小库（26//4=6 年）缺口更小。
+
+### 进度
+
+| 步骤 | 状态 | 验证结果 |
+|---|---|---|
+| 核心算法 new_energy 9 模块 | 完成 | 冒烟：风全场景 6 曲线 12 文件（8761 行、列头正确）、单场景只出对应文件、非法场景报错 |
+| api/ + core/ 服务层（纯同步） | 完成 | tests/test_service.py **12/12 通过**（health、参数/目录 400、wind normal 端到端：data 为 4 张表 {表名:[sheet]}、index 8760、两列、文件落盘 output_dir） |
+| 光伏路径 | 已实现未测 | data/solar 数据未到位，用户决定暂不测（缺失数据不造） |
+| NEW_ENERFGY_ALGO_DESIGN.md 输入契约段 | 未同步 | 待收口时更新 |
+
 ## 需求
 
 > 已确认的需求。
@@ -209,3 +269,4 @@ regression_out/            重构版回归输出
 - 2026-10-22 **两处降级判据留痕**：NPZ（np.savez 内嵌 zip 时间戳，md5 非确定）按键集+数组逐位；classifications_and_results.json 仅 9 个 '目录' 字段含输出根绝对路径，按路径归一后逐字段一致。均在 tests/compare_outputs.py 实现，比对输出打印 NPZ-OK/PATH-OK。
 - 2026-10-22 **任务编排放服务层线程**：run_pipeline 为同步长任务，JobManager 用 daemon 线程执行 + 进度回调（步骤 0—6 映射 0~1），路由层 asyncio.to_thread 包结果读取；算法包保持纯 dict 进出、无 fastapi 依赖。
 - 2026-10-22 **无效 hainan_dir 提交即 400**：JobManager.submit 先做目录与 wind/solar 存在性校验（run_pipeline 内仍会复核），避免无效任务占用后台线程后才失败。
+- 2026-10-22 **new_energy 服务纯同步、单接口**（用户裁决，取代上上条的线程方案）：删除 jobs 提交/状态/结果查询三端点与 JobManager 线程/事件/进度机制，只留 `POST /api/curve/compute`（普通 def 路由，FastAPI 线程池执行）阻塞直返；曲线数据随响应内联（api-json-format），文件仍写 outputs/ 留档；core/ 缩为 compute.py 同步编排。
