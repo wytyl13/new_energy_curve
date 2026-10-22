@@ -1,131 +1,102 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-@Time    : 2026/10/22 15:30
+@Time    : 2026/10/22 16:40
 @Author  : weiyutao
 @File    : make_dim_flow_figure.py
 
-按确认的维度流转文本重绘算法流程图（覆盖 算法流程图.png）。
-节点=操作，边=张量形状；纵排主线 + stage1 三泳道。
+NN 结构图风格的维度流转图（参考 算法处理流程_单页.pptx 第2页）：
+每列一层操作，节点=圆圈，连线=数据流，列下标注输出形状。覆盖 算法流程图.png。
 """
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-from matplotlib.patches import FancyArrow, FancyBboxPatch
+from matplotlib.patches import Circle
 
 plt.rcParams['font.family'] = ['Microsoft YaHei', 'SimHei']
 plt.rcParams['axes.unicode_minus'] = False
 
-C_INPUT = ('#D6E4F7', '#2E5E9E')   # 蓝
-C_S1 = ('#D9F0E9', '#1F7A5C')      # 青
-C_S2 = ('#FCEFD3', '#B07A1F')      # 琥珀
-C_S34 = ('#EBE2F6', '#6C48A8')     # 紫
-C_S5 = ('#FAE3E5', '#A63A45')      # 玫红
-C_OUT = ('#DFF3D8', '#2F7A33')     # 绿
-INK = '#333333'
+C_IN = ('#D6E4F7', '#2E5E9E')     # 输入 蓝
+C_S1 = ('#D9F0E9', '#1F7A5C')     # 空间平均 青
+C_S2 = ('#FCEFD3', '#B07A1F')     # 分档 琥珀
+C_S34 = ('#EBE2F6', '#6C48A8')    # 选年/修极端 紫
+C_S5 = ('#FAE3E5', '#A63A45')     # 出力 玫红
+C_OUT = ('#DFF3D8', '#2F7A33')    # 输出 绿
+INK, LINE = '#333333', '#AAAAAA'
 
-fig, ax = plt.subplots(figsize=(9.6, 15.2), dpi=200)
-ax.set_xlim(0, 100)
-ax.set_ylim(158, 0)          # 反转 y：自上而下
+fig, ax = plt.subplots(figsize=(12.8, 7.4), dpi=200)
+ax.set_xlim(0, 104)
+ax.set_ylim(58, 0)
+ax.set_aspect('equal')
 ax.axis('off')
 
-
-def box(x0, y0, w, h, lines, palette, title_bold=True, fs=8.3):
-    fill, edge = palette
-    ax.add_patch(FancyBboxPatch((x0, y0), w, h, boxstyle='round,pad=0.6',
-                                fc=fill, ec=edge, lw=1.4))
-    cx = x0 + w / 2
-    n = len(lines)
-    for i, ln in enumerate(lines):
-        first = i == 0 and title_bold
-        ax.text(cx, y0 + h * (i + 0.55) / n, ln, ha='center', va='center',
-                fontsize=fs + (1.1 if first else 0), color=edge if first else INK,
-                fontweight='bold' if first else 'normal',
-                fontfamily='Microsoft YaHei' if first or any('一' <= ch <= '鿿' for ch in ln)
-                else 'monospace')
+ROWS = (17, 27, 37)          # 海风行 / 陆风行 / 光伏行
+XIN, X1, X2, X3, X4, X5, XO = 8, 23, 39, 55, 71, 86, 97
+R, RO = 3.5, 2.1
 
 
-def arrow(x, y0, y1, label='', dx_label=1.2):
-    ax.add_patch(FancyArrow(x, y0, 0, y1 - y0, width=0.06, head_width=1.6,
-                            head_length=1.6, length_includes_head=True,
-                            fc=INK, ec=INK))
-    if label:
-        cjk = any('一' <= ch <= '鿿' for ch in label)
-        ax.text(x + dx_label, (y0 + y1) / 2, label, ha='left', va='center',
-                fontsize=8, color=INK,
-                fontfamily='Microsoft YaHei' if cjk else 'monospace')
+def node(x, y, text, palette, r=R, fs=7.2):
+    ax.add_patch(Circle((x, y), r, fc=palette[0], ec=palette[1], lw=1.4, zorder=3))
+    ax.text(x, y, text, ha='center', va='center', fontsize=fs,
+            color=palette[1], fontweight='bold', zorder=4, linespacing=1.25)
 
 
-# ── 标题 ──
-ax.text(50, 4, '海南风光九条出力曲线 · 数据维度流转', ha='center', va='center',
+def link(x0, y0, x1, y1):
+    ax.plot([x0, x1], [y0, y1], color=LINE, lw=0.9, zorder=1)
+
+
+def caption(x, lines, color):
+    ax.text(x, 45.5, lines[0], ha='center', va='top', fontsize=8.6,
+            color=color, fontweight='bold')
+    ax.text(x, 48.6, lines[1], ha='center', va='top', fontsize=8,
+            color=INK, fontfamily='monospace')
+
+
+ax.text(52, 3.5, '海南风光九条出力曲线 · 数据流转网络图', ha='center', va='center',
         fontsize=15, fontweight='bold', color=INK)
 
-# ── 输入 ──
-box(10, 8, 80, 15, [
-    '输入',
-    'u100 / v100 (76, 8760, 8, 10)  m/s      76=年份数(1950–2025)',
-    'ssrd         (76, 8760, 8, 10)  J/m²    8=纬度格 × 10=经度格 = 80 格点',
-    'mask_sea (80,) bool 31海格  |  mask_land (80,) bool 49陆格'], C_INPUT)
+# ── 连线（先画线，节点后画盖住线头）──
+sea, land, sol = ROWS
+u100, v100, ssrd = (XIN, 13.5), (XIN, 20.5), (XIN, 37)
+for src in (u100, v100):
+    for dst_y in (sea, land):
+        link(src[0], src[1], X1, dst_y)
+link(*ssrd, X1, sol)
+for x0, x1 in ((X1, X2), (X2, X3), (X3, X4), (X4, X5)):
+    for y in ROWS:
+        link(x0, y, x1, y)
+groups = ((sea, (12, 16, 20)), (land, (25, 29, 33)), (sol, (38, 42, 46)))
+for row_y, outs in groups:
+    for oy in outs:
+        link(X5, row_y, XO, oy)
 
-# ── stage 1 三泳道 ──
-lane_y, lane_h = 30, 22
-lanes = [
-    (6, '① 海风分支', ['hypot(u100,v100)', '(76,8760,8,10)', '展平→(76,8760,80)',
-                        '海格均值 dim=80', '(76, 8760)']),
-    (38, '① 陆风分支', ['hypot(u100,v100)', '(76,8760,8,10)', '展平→(76,8760,80)',
-                         '陆格均值 dim=80', '(76, 8760)']),
-    (70, '① 光伏分支', ['ssrd', '(76,8760,8,10)', '展平→(76,8760,80)',
-                         '全格均值÷3600', '(76, 8760)'])]
-for lx, title, lines in lanes:
-    box(lx, lane_y, 24, lane_h, [title] + lines, C_S1, fs=7.6)
-    arrow(lx + 12, 23, lane_y - 0.8)
-ax.text(50, 54.6, '空间维在此消失 → 之后全部操作都在 8760 时间轴上（3 份 (76,8760)）',
-        ha='center', va='center', fontsize=8.6, color=C_S1[1], fontweight='bold')
+# ── 节点 ──
+node(*u100, 'u100', C_IN); node(*v100, 'v100', C_IN); node(*ssrd, 'ssrd', C_IN)
+labels1 = ('海风', '陆风', '光伏')
+for y, t in zip(ROWS, labels1):
+    node(X1, y, t, C_S1, fs=8.6)
+    node(X2, y, f'{t}\n切档', C_S2)
+    node(X3, y, f'{t}\n选年', C_S34)
+    node(X4, y, f'{t}\n修极端', C_S34, fs=6.8)
+    node(X5, y, f'{t}\n出力', C_S5)
+for row_y, outs in groups:
+    for oy, t in zip(outs, ('大', '平', '小')):
+        node(XO, oy, t, C_OUT, r=RO, fs=7.4)
+for gy, name in ((16, '海风库'), (29, '陆风库'), (42, '光伏库')):
+    ax.text(101.8, gy, name, rotation=90, ha='center', va='center',
+            fontsize=8, color=C_OUT[1], fontweight='bold')
 
-# ── stage 2 ──
-arrow(50, 56, 61, '(76,8760) ×3', 1.4)
-box(10, 62, 80, 17, [
-    '② 分档（3 条各自做）',
-    '年指标 reduce(dim=8760) → (76,)   76=每年一个标量',
-    '风: (1/8760)·Σ v³（功率∝v³，按能量权重）   光: Σ G / 1000（量纲缩放）',
-    '76 年排序切三档 → 索引 [19] [38] [19]（大/平均/小 各档年份数）'], C_S2)
+# ── 列标注：层名 + 输出形状 ──
+caption(XIN, ('输入', '(76,8760,8,10)\n风u/v100 · 光ssrd'), C_IN[1])
+caption(X1, ('① 空间平均', '(76,8760)\n海31格|陆49格|光80格'), C_S1[1])
+caption(X2, ('② 分档', '[19][38][19]\n风Σv³ · 光ΣG/1000'), C_S2[1])
+caption(X3, ('③ 选代表年', 'rep (8760,)\nmedoid·真实年不平均'), C_S34[1])
+caption(X4, ('④ 修极端', '(8760,)\n风≥3h段|光整日'), C_S34[1])
+caption(X5, ('⑤ 出力映射', '(8760,)\n风功率曲线|光0.6G/1000'), C_S5[1])
+caption(XO, ('输出', '9=3类型×3档\n(9,8760,4)+(9,8760)+(9,)'), C_OUT[1])
 
-# ── stage 3 ──
-arrow(50, 79, 84, '(76,) 索引', 1.4)
-box(10, 85, 80, 17, [
-    '③ 选代表年（9 库各自做，库 = 3资源类型 × 3资源档）',
-    'gather 按档取行 (n, 8760)，n ∈ {19, 38, 19}',
-    '库内两两 8760 维欧氏距离求和 (n,) → argmin 选最典型 1 行',
-    '骨架 rep (8760,) = 真实年整行原样取出   ★ 不做逐年平均'], C_S34)
-
-# ── stage 4 ──
-arrow(50, 102, 107, '(8760,)', 1.4)
-box(10, 108, 80, 17, [
-    '④ 修极端（形状不变，替换部分值）',
-    '风: ≥3h 连续段替换（配额贴 76 年 P10/P90，段间隔 3h，每日 ≤1 段）',
-    '光: 低光日整日替换，一次 24 小时',
-    '插后 (8760,) + 修改标记 (8760,) bool   ★ 真实片段换真实片段'], C_S34)
-
-# ── stage 5 ──
-arrow(50, 125, 130, '(8760,)', 1.4)
-box(10, 131, 80, 14, [
-    '⑤ 出力（逐元素确定性映射，插前/插后各一遍）',
-    '风: 功率曲线  0 → 立方爬坡 → 顶格α → 0（海 4/11/25 α0.70｜陆 2.5/9/18 α0.95）',
-    '光: 0.6 · G / 1000                                          → (8760,)'], C_S5, fs=7.9)
-
-# ── 输出 ──
-arrow(50, 145, 150, '(8760,) ×9', 1.4)
-box(8, 151, 84, 13.5, [
-    '总输出（9 = 3资源类型(海风/陆风/光伏) × 3资源档(大/平均/小)）',
-    '资源与出力曲线 (9, 8760, 4)   4 = 插前资源/插后资源/插前出力/插后出力',
-    '修改标记 (9, 8760) bool    利用小时 (9,) = 出力沿 8760 求和（等效满发小时）'], C_OUT, fs=7.9)
-
-# ── 右侧不变式括注 ──
-ax.plot([95.2, 95.2], [86, 144], color=C_S34[1], lw=1.2, ls=(0, (4, 3)))
-ax.plot([94.2, 95.2], [86, 86], color=C_S34[1], lw=1.2)
-ax.plot([94.2, 95.2], [144, 144], color=C_S34[1], lw=1.2)
-ax.text(97.2, 115, '③④⑤ 9 库各自执行\n形状锁定 (8760,)\n取行/换值，无合成数据', rotation=90,
-        ha='center', va='center', fontsize=8.6, color=C_S34[1], fontweight='bold')
+ax.text(52, 56.5, '①后空间维消失，只有 8760 时间轴　·　③④形状锁定 (8760,)，取行/换值，全程真实数据无合成',
+        ha='center', va='center', fontsize=8.8, color=INK)
 
 out = Path(__file__).resolve().parent / '算法流程图.png'
 fig.savefig(out, bbox_inches='tight', facecolor='white')
