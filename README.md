@@ -67,7 +67,7 @@ HTTP 客户端
 
 ![算法流程图](算法流程图.png)
 
-维度流转的完整描述（每个张量完整形状、非显然轴当场解释、与上图逐层对应）固定在 [ALGO_DESIGN.md](ALGO_DESIGN.md)。
+维度流转的完整描述（每个张量完整形状、非显然轴当场解释、与上图逐层对应）固定在 [NEW_ENERFGY_ALGO_DESIGN.md](NEW_ENERFGY_ALGO_DESIGN.md)。
 
 各步骤与代码模块的对应见下表：
 

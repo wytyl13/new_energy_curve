@@ -1,7 +1,8 @@
 # 算法设计 · 数据维度流转
 
-> 本文件是算法数据流转的固定说明：流程图 + 维度流转描述。
-> 算法变更时同步更新本文件（梳理规则见 skill `algo-dim-flow`）。
+## 背景
+
+本项目把海南 1950—2025 年共 76 年的 ERA5 风光资源 NC 数据（风 u100/v100、光伏 ssrd，8×10 网格共 80 格）加工为 9 条 8760 小时归一化出力曲线：海风/陆风/光伏 × 大/平均/小资源年。输入是 hainan 目录下的 wind/、solar/ 两族 NC 文件，输出是 9 个资源库四件套、九条 8760 小时资源与出力总表、最大利用小时表与复核报告。核心设计原则：曲线骨架取自真实年份（不做逐年平均），极端修正确只做真实片段对真实片段的替换，全程无合成数据。
 
 ## 流程图
 
@@ -58,12 +59,12 @@ stage 5 出力（逐元素映射）
 
 ## 步骤与代码模块对应
 
-| stage | 模块 |
-|---|---|
-| 网格校验（mask 来源） | refactor/curve_pipeline/grid_mask.py |
-| stage 1 空间平均 | refactor/curve_pipeline/nc_cache.py |
-| stage 2 分档 / stage 3 选代表年 | refactor/curve_pipeline/classify_cluster.py |
-| stage 4 风 | refactor/curve_pipeline/wind_insert.py |
-| stage 4 光 | refactor/curve_pipeline/solar_insert.py |
-| stage 5 出力映射 | refactor/curve_pipeline/power_curves.py |
-| 总输出与复核 | refactor/curve_pipeline/power_curves.py、verify_outputs.py |
+| stage                           | 模块                                                       |
+| ------------------------------- | ---------------------------------------------------------- |
+| 网格校验（mask 来源）           | refactor/curve_pipeline/grid_mask.py                       |
+| stage 1 空间平均                | refactor/curve_pipeline/nc_cache.py                        |
+| stage 2 分档 / stage 3 选代表年 | refactor/curve_pipeline/classify_cluster.py                |
+| stage 4 风                      | refactor/curve_pipeline/wind_insert.py                     |
+| stage 4 光                      | refactor/curve_pipeline/solar_insert.py                    |
+| stage 5 出力映射                | refactor/curve_pipeline/power_curves.py                    |
+| 总输出与复核                    | refactor/curve_pipeline/power_curves.py、verify_outputs.py |
