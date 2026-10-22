@@ -137,7 +137,7 @@ refactor/
     verify_outputs.py      步骤4 复核
     plot_results.py        步骤5 画图
     pipeline.py            步骤编排 + run_pipeline(request) 唯一入口
-  curve_service/           FastAPI 服务层（service-api 骨架）
+  curve_service/           FastAPI 服务层（service-api 目录结构）
     api/server/app_server.py   app 装配四件 + 全局异常
     api/routers/curve_router.py  薄路由
     api/schema/curve_schema.py   请求体模型
