@@ -25,7 +25,7 @@ from .classify import classify_years
 from .load_csv import load_region
 from .mask_lookup import sea_flags, zone_mean
 from .medoid import medoid
-from .power import power_series
+from .power import power_series, resolve_power_params
 from .solar_insert import insert_solar
 from .wind_insert import insert_wind
 
@@ -53,7 +53,8 @@ def _sheet(sheet_name: str, kind: str, index: list[str],
 
 
 def _one_library(kind: str, zone: str, label: str, years_group: list[int],
-                 data: dict[int, np.ndarray], out_dir: Path) -> list[dict]:
+                 data: dict[int, np.ndarray], out_dir: Path,
+                 wind_p: tuple | None = None, pv_eff: float = .6) -> list[dict]:
     """一个库（曲线×场景）：选代表年 → 极端修正 → 出力 → 写两个文件，返回两个 sheet。"""
     X = np.array([data[y] for y in years_group])
     k, _costs = medoid(X, years_group)
@@ -62,8 +63,8 @@ def _one_library(kind: str, zone: str, label: str, years_group: list[int],
         after, _targets, _logs, _cands = insert_wind(X, years_group, before)
     else:
         after, _targets, _logs, _cands = insert_solar(X, years_group, before)
-    p0 = power_series(kind, zone, before)
-    p1 = power_series(kind, zone, after)
+    p0 = power_series(kind, zone, before, wind_p, pv_eff)
+    p1 = power_series(kind, zone, after, wind_p, pv_eff)
     curve = CURVE_NAMES[kind][zone]
     _write_curve(out_dir / f'{curve}-{label}-资源.csv',
                  ['时间维度', '插入前资源', '插入后资源'], [before, after])
@@ -75,7 +76,7 @@ def _one_library(kind: str, zone: str, label: str, years_group: list[int],
 
 
 def run(resource: str, scenario: str, data_dir, out_dir,
-        mask_csv=None, progress=None) -> dict:
+        mask_csv=None, progress=None, wind_params=None, pv_efficiency=None) -> dict:
     """运行核心算法：读区域CSV → 掩码分格平均 → 分档选年 → 修极端 → 出力。
 
     Args:
@@ -85,6 +86,9 @@ def run(resource: str, scenario: str, data_dir, out_dir,
         out_dir: 结果输出目录。
         mask_csv: 全国海陆掩码路径，缺省项目 data/ 下静态文件（仅风用）。
         progress: 可选回调 progress(0~1小数, 步骤说明)，服务层报进度用。
+        wind_params: 可选风机参数 {'sea'/'land': {cut_in/rated/cut_out/alpha
+            部分或全部}}，缺省字段用冻结默认（海 4/11/25 m/s α=0.70，陆 2.5/9/18 α=0.95）。
+        pv_efficiency: 可选光伏综合效率系数，缺省 0.6（冻结值）。
 
     Returns:
         dict: {表名: [sheet]}，表名 = 曲线-场景-资源/出力（与结果文件同名），
@@ -94,6 +98,7 @@ def run(resource: str, scenario: str, data_dir, out_dir,
         raise ValueError(f"resource 须为 'wind' 或 'solar'，实际 {resource!r}")
     if scenario not in (*SCENARIOS, 'all'):
         raise ValueError(f"scenario 须为 normal/high/low/all，实际 {scenario!r}")
+    wind_p, pv_eff = resolve_power_params(wind_params, pv_efficiency)
     data_dir, out_dir = Path(data_dir), Path(out_dir)
     zones = (['sea', 'land'] if resource == 'wind' else ['all'])
     wanted = list(SCENARIOS) if scenario == 'all' else [scenario]
@@ -122,7 +127,8 @@ def run(resource: str, scenario: str, data_dir, out_dir,
         for s in wanted:
             label = SCENARIOS[s]
             for sheet in _one_library(resource, zone, label,
-                                      classes[LEVEL_OF[label]], data, out_dir):
+                                      classes[LEVEL_OF[label]], data, out_dir,
+                                      wind_p.get(zone), pv_eff):
                 tables[sheet['sheet_name']] = [sheet]
             _tick(f"{CURVE_NAMES[resource][zone]}-{label} 完成")
     return tables

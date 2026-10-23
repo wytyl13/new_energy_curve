@@ -202,7 +202,7 @@ regression_out/            重构版回归输出
 | 端点 | 方法 | 传参 | 返回 |
 |---|---|---|---|
 | /api/health | GET | 无 | {status, message, timestamp} |
-| /api/curve/compute | POST | {resource, scenario, data_dir, output_dir?} | 阻塞至算完：data = {表名: [sheet]}（表名=曲线-场景-资源/出力，sheet 含 index 8760 + 插入前/后两列）；文件写 output_dir（自动创建）或缺省 outputs/<时间戳_短随机>/ |
+| /api/curve/compute | POST | {resource, scenario, data_dir, output_dir?, wind_params?, pv_params?} | 阻塞至算完：data = {表名: [sheet]}（表名=曲线-场景-资源/出力，sheet 含 index 8760 + 插入前/后两列）；文件写 output_dir（自动创建）或缺省 outputs/<时间戳_短随机>/ |
 
 结果根目录：环境变量 `CURVE_OUTPUTS_ROOT`，缺省项目根 `outputs/`；每次计算独立子目录
 （`时间戳_短随机`）。
@@ -228,6 +228,7 @@ medoid 年本就贴库均值，小库（26//4=6 年）缺口更小。
 | 核心算法 new_energy 9 模块 | 完成 | 冒烟：风全场景 6 曲线 12 文件（8761 行、列头正确）、单场景只出对应文件、非法场景报错 |
 | api/ + core/ 服务层（纯同步） | 完成 | tests/test_service.py **12/12 通过**（health、参数/目录 400、wind normal 端到端：data 为 4 张表 {表名:[sheet]}、index 8760、两列、文件落盘 output_dir） |
 | 光伏路径 | 已实现未测 | data/solar 数据未到位，用户决定暂不测（缺失数据不造） |
+| 风机/光伏出力参数暴露（wind_params / pv_params） | 完成 | 2026-10-23 tests/test_service.py **18/18 通过**（缺省路径出力=冻结公式逐点一致；自定义 sea/land 参数全列比对生效；额定≤切入 / α>1 / 效率≤0 → 400） |
 | NEW_ENERFGY_ALGO_DESIGN.md 输入契约段 | 未同步 | 待收口时更新 |
 
 ## 需求
@@ -270,3 +271,4 @@ medoid 年本就贴库均值，小库（26//4=6 年）缺口更小。
 - 2026-10-22 **任务编排放服务层线程**：run_pipeline 为同步长任务，JobManager 用 daemon 线程执行 + 进度回调（步骤 0—6 映射 0~1），路由层 asyncio.to_thread 包结果读取；算法包保持纯 dict 进出、无 fastapi 依赖。
 - 2026-10-22 **无效 hainan_dir 提交即 400**：JobManager.submit 先做目录与 wind/solar 存在性校验（run_pipeline 内仍会复核），避免无效任务占用后台线程后才失败。
 - 2026-10-22 **new_energy 服务纯同步、单接口**（用户裁决，取代上上条的线程方案）：删除 jobs 提交/状态/结果查询三端点与 JobManager 线程/事件/进度机制，只留 `POST /api/curve/compute`（普通 def 路由，FastAPI 线程池执行）阻塞直返；曲线数据随响应内联（api-json-format），文件仍写 outputs/ 留档；core/ 缩为 compute.py 同步编排。
+- 2026-10-23 **风机/光伏参数暴露为可选请求参数，缺省=冻结值**（用户裁决）：`wind_params`（sea/land 各 cut_in/rated/cut_out/alpha，支持部分覆盖，未知风区/字段报错防静默失效）与 `pv_params.efficiency` 经 schema→router→compute 透传，`power.resolve_power_params` 在算法入口一次合并校验（0<切入<额定<切出、0<α≤1、0<效率≤1，违者 400）；`WIND_PARAMS` 与 0.6 保留为缺省，传非默认值即偏离冻结基准，回归只锁缺省路径。

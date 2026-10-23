@@ -21,5 +21,8 @@ router = APIRouter(prefix='/api/curve', tags=['curve'])
 @router.post('/compute')
 def compute_curve(req: ComputeReq):
     """同步计算：阻塞等待完成，响应内直接带曲线数据（文件仍写 outputs/ 留档）。"""
-    data = compute(req.resource, req.scenario, req.data_dir, req.output_dir)
+    wind = req.wind_params.model_dump(exclude_none=True) if req.wind_params else None
+    pv_eff = req.pv_params.efficiency if req.pv_params else None
+    data = compute(req.resource, req.scenario, req.data_dir, req.output_dir,
+                   wind_params=wind, pv_efficiency=pv_eff)
     return make_response(True, '计算完成', data)

@@ -86,7 +86,7 @@ HTTP 客户端
 | 陆风   | 陆上格点平均风速的代表年曲线 | 同海风，按陆风指标独立排序                | 切入 2.5 / 额定 9 / 切出 18 m/s，α=0.95 |
 | 光伏   | 全格平均辐照度的代表年曲线   | 按 ΣG/1000 排序分档；低光日整日替换      | 0.6·G/1000（G 为 W/m² 小时均值）       |
 
-每族 × 场景（大/正常/小）为一个库；`resource='wind'` 一次算出海风+陆风两族，`resource='solar'` 算光伏一族。
+每族 × 场景（大/正常/小）为一个库；`resource='wind'` 一次算出海风+陆风两族，`resource='solar'` 算光伏一族。上表换算参数为冻结缺省值，可经请求 `wind_params` / `pv_params` 覆盖（逐字段说明见第 7 章）。
 
 | 库           | 输入数据                             | 输出数据                                       |
 | ------------ | ------------------------------------ | ---------------------------------------------- |
@@ -126,13 +126,25 @@ HTTP 客户端
 ```json
 {"resource": "wind", "scenario": "normal",
  "data_dir": "C:/Users/weiyutao/20260823/new_energy_curve/data/wind",
- "output_dir": "D:/results/demo"}
+ "output_dir": "D:/results/demo",
+ "wind_params": {"sea": {"cut_in": 4, "rated": 11, "cut_out": 25, "alpha": 0.70},
+                 "land": {"cut_in": 2.5, "rated": 9, "cut_out": 18, "alpha": 0.95}},
+ "pv_params": {"efficiency": 0.6}}
 ```
 
 > resource：必填，'wind'（一次算出海风+陆风）或 'solar'（光伏），资源类型。
 > scenario：必填，'normal' 正常 / 'high' 大 / 'low' 小 / 'all' 全部，资源场景。
 > data_dir：必填，输入目录绝对路径，内含每年一个区域 CSV。
 > output_dir：可选，缺省 outputs/<时间戳_短随机>/，结果 CSV 写入该目录（不存在则创建）。
+> wind_params：可选，风机参数，不传用冻结默认；支持只传部分字段，省略的字段落默认。
+>   sea：可选，海上风机组参数；land：可选，陆上风机组参数。各含 4 个字段（均可省略）：
+>   cut_in：切入风速，m/s，低于此风速出力为 0；默认 海 4 / 陆 2.5。
+>   rated：额定风速，m/s，达到此风速满发；默认 海 11 / 陆 9。
+>   cut_out：切出风速，m/s，达到此风速停机、出力为 0；默认 海 25 / 陆 18。
+>   alpha：顶格系数，满发时的标幺出力，取值 (0,1]；默认 海 0.70 / 陆 0.95。
+>   校验：须满足 0 < cut_in < rated < cut_out，且各风区字段合法，否则 400。
+> pv_params：可选，光伏参数，不传用冻结默认。
+>   efficiency：综合效率系数，出力标幺 = 效率 × 辐照 / 1000，取值 (0,1]；默认 0.6。
 
 data_dir 内文件与表头格式：
 
