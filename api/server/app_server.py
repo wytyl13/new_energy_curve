@@ -42,8 +42,9 @@ def create_app() -> FastAPI:
     @app.middleware('http')
     async def log_requests(request: Request, call_next):
         start = time.perf_counter()
+        body = (await request.body()).decode('utf-8', 'replace')
         response = await call_next(request)
-        logger.info('%s %s -> %s (%.1fms)', request.method, request.url.path,
+        logger.info('%s %s body=%s -> %s (%.1fms)', request.method, request.url.path, body,
                     response.status_code, (time.perf_counter() - start) * 1000)
         return response
 
@@ -54,10 +55,12 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(LookupError)
     async def not_found_handler(request: Request, exc: LookupError):
+        logger.warning('LookupError %s %s: %s', request.method, request.url.path, exc)
         return JSONResponse(status_code=404, content=make_response(False, str(exc)))
 
     @app.exception_handler(ValueError)
     async def bad_request_handler(request: Request, exc: ValueError):
+        logger.warning('ValueError %s %s: %s', request.method, request.url.path, exc, exc_info=True)
         return JSONResponse(status_code=400, content=make_response(False, str(exc)))
 
     @app.exception_handler(Exception)
