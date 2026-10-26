@@ -19,7 +19,7 @@ from new_energy import run
 
 def compute(resource: str, scenario: str, data_dir: str,
             output_dir=None, outputs_root=None,
-            wind_params=None, pv_efficiency=None) -> dict:
+            wind_params=None, pv_efficiency=None, wind_zone='all') -> dict:
     """同步跑一次完整计算：结果文件写指定/自动目录，返回表格数据
     {表名: [sheet]}（表名 = 曲线-场景-资源/出力，api-json-format）。
 
@@ -31,6 +31,8 @@ def compute(resource: str, scenario: str, data_dir: str,
         outputs_root: 自动命名时的结果根目录，缺省环境变量 CURVE_OUTPUTS_ROOT 或项目根 outputs/。
         wind_params: 可选风机参数（透传算法层；缺省用冻结默认，见 new_energy.power）。
         pv_efficiency: 可选光伏综合效率系数（透传算法层；缺省 0.6）。
+        wind_zone: 风区口径（透传算法层）：'sea'/'land' 全区统一按该风区处理；
+            'all'（缺省）按掩码分海陆、空区跳过。仅 wind 生效。
 
     Raises:
         ValueError: 参数非法 / 目录不存在或无 CSV（HTTP 层映射 400）。
@@ -48,4 +50,5 @@ def compute(resource: str, scenario: str, data_dir: str,
             or Path(__file__).resolve().parents[1] / 'outputs')
         out_dir = root / f"{time.strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
     return run(resource, scenario, data_dir, out_dir,
-               wind_params=wind_params, pv_efficiency=pv_efficiency)
+               wind_params=wind_params, pv_efficiency=pv_efficiency,
+               wind_zone=wind_zone)

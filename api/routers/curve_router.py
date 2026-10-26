@@ -24,5 +24,5 @@ def compute_curve(req: ComputeReq):
     wind = req.wind_params.model_dump(exclude_none=True) if req.wind_params else None
     pv_eff = req.pv_params.efficiency if req.pv_params else None
     data = compute(req.resource, req.scenario, req.data_dir, req.output_dir,
-                   wind_params=wind, pv_efficiency=pv_eff)
+                   wind_params=wind, pv_efficiency=pv_eff, wind_zone=req.wind_zone)
     return make_response(True, '计算完成', data)

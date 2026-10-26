@@ -39,3 +39,4 @@ class ComputeReq(BaseModel):
     output_dir: str | None = Field(None, description='可选结果输出目录；缺省写 outputs/<时间戳_短随机>/')
     wind_params: WindParams | None = Field(None, description='可选风机参数（不传用冻结默认：海 4/11/25 m/s α=0.70，陆 2.5/9/18 m/s α=0.95）')
     pv_params: PvParams | None = Field(None, description='可选光伏参数（不传用冻结默认：综合效率 0.6）')
+    wind_zone: str = Field('all', description="可选风区口径（仅 wind 生效）：'sea' 全区统一按海风处理 / 'land' 全区统一按陆风处理 / 'all'（缺省）按掩码自动分海陆、空区跳过（支持纯海/纯陆区域）")

@@ -5,9 +5,12 @@
 @Author  : weiyutao
 @File    : pipeline.py
 
-组合入口：run(resource, scenario, data_dir, out_dir)。
+组合入口：run(resource, scenario, data_dir, out_dir, wind_zone='all')。
 resource = 'wind' | 'solar'；scenario = 'normal' | 'high' | 'low' | 'all'。
 风一次算出海风+陆风（全国掩码分格点）；光为光伏（全格平均）。
+2026-10-26 起风区口径可经 wind_zone 指定：'sea'/'land' 全区统一按该风区
+处理（不查掩码、全格平均、用该风区机组参数）；'all' 缺省按掩码分海陆，
+空区跳过（支持纯海/纯陆区域，对应原始包 --only 单库核算）。
 传什么场景算什么，all = 大/正常/小全部。每条曲线写两个结果文件：
   <曲线>-<场景>-资源.csv：列 = 时间维度, 插入前资源, 插入后资源
   <曲线>-<场景>-出力.csv：列 = 时间维度, 插入前出力, 插入后出力
@@ -76,7 +79,8 @@ def _one_library(kind: str, zone: str, label: str, years_group: list[int],
 
 
 def run(resource: str, scenario: str, data_dir, out_dir,
-        mask_csv=None, progress=None, wind_params=None, pv_efficiency=None) -> dict:
+        mask_csv=None, progress=None, wind_params=None, pv_efficiency=None,
+        wind_zone='all') -> dict:
     """运行核心算法：读区域CSV → 掩码分格平均 → 分档选年 → 修极端 → 出力。
 
     Args:
@@ -89,6 +93,9 @@ def run(resource: str, scenario: str, data_dir, out_dir,
         wind_params: 可选风机参数 {'sea'/'land': {cut_in/rated/cut_out/alpha
             部分或全部}}，缺省字段用冻结默认（海 4/11/25 m/s α=0.70，陆 2.5/9/18 α=0.95）。
         pv_efficiency: 可选光伏综合效率系数，缺省 0.6（冻结值）。
+        wind_zone: 风区口径，'sea'/'land' 全区统一按该风区处理（不查掩码）；
+            'all'（缺省）按掩码分海陆、空区跳过（纯海/纯陆区域只算存在的库）。
+            仅 resource='wind' 生效，solar 忽略。
 
     Returns:
         dict: {表名: [sheet]}，表名 = 曲线-场景-资源/出力（与结果文件同名），
@@ -98,11 +105,11 @@ def run(resource: str, scenario: str, data_dir, out_dir,
         raise ValueError(f"resource 须为 'wind' 或 'solar'，实际 {resource!r}")
     if scenario not in (*SCENARIOS, 'all'):
         raise ValueError(f"scenario 须为 normal/high/low/all，实际 {scenario!r}")
+    if wind_zone not in ('sea', 'land', 'all'):
+        raise ValueError(f"wind_zone 须为 sea/land/all，实际 {wind_zone!r}")
     wind_p, pv_eff = resolve_power_params(wind_params, pv_efficiency)
     data_dir, out_dir = Path(data_dir), Path(out_dir)
-    zones = (['sea', 'land'] if resource == 'wind' else ['all'])
     wanted = list(SCENARIOS) if scenario == 'all' else [scenario]
-    total = 1 + len(zones) * len(wanted)  # 读取1步 + 每库1步
     done = 0
 
     def _tick(text: str):
@@ -112,11 +119,20 @@ def run(resource: str, scenario: str, data_dir, out_dir,
             progress(round(done / total, 4), text)
 
     years, lats, lons, cube = load_region(data_dir)
+    # 风区口径：sea/land 全区统一按该风区处理（不查掩码、全格平均、用该风区
+    # 机组参数）；all 按掩码分海陆，空区跳过（纯海/纯陆区域）。光恒为 all。
+    flags = sea_flags(lats, lons, mask_csv) if resource == 'wind' and wind_zone == 'all' else None
+    if resource == 'wind':
+        zones = ([wind_zone] if wind_zone != 'all' else
+                 [z for z in ('sea', 'land') if (flags if z == 'sea' else ~flags).any()])
+    else:
+        zones = ['all']
+    total = 1 + len(zones) * len(wanted)  # 读取1步 + 每库1步
     _tick(f'读取完成：{len(years)}年')
     tables: dict[str, list[dict]] = {}
     for zone in zones:
-        data = zone_mean(cube, years, sea_flags(lats, lons, mask_csv), zone) \
-            if resource == 'wind' else dict(zip(years, cube.mean(axis=2)))
+        data = zone_mean(cube, years, flags, zone) if flags is not None \
+            else dict(zip(years, cube.mean(axis=2)))
         if resource == 'solar':
             # SSRD数据偶有约10^-3 W/m²的数值负噪声，物理上按0处理。
             lo = min(a.min() for a in data.values())
