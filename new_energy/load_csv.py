@@ -63,4 +63,7 @@ def load_region(data_dir) -> tuple[list[int], np.ndarray, np.ndarray, np.ndarray
     cube = np.stack(blocks)  # (N,8760,G)
     if not np.isfinite(cube).all():
         raise ValueError('输入含非有限值')
+    # UTC→北京时（UTC+8）：小时轴整体右移8小时。当地1月1日00:00–07:00无当年UTC数据，
+    # 按右侧最近点（当地08:00 = UTC 00:00）取值填充；年末最后8个UTC小时属次年当地时间，舍弃。
+    cube = np.concatenate([np.repeat(cube[:, :1], 8, axis=1), cube[:, :-8]], axis=1)
     return years, lats, lons, cube
